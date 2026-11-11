@@ -15,7 +15,8 @@ function flattenCustomFields(lead: KommoLead): Record<string, string> {
   const out: Record<string, string> = {};
   for (const f of lead.custom_fields_values ?? []) {
     const v = f.values.map((x) => String(x.value ?? "")).filter(Boolean).join(", ");
-    if (v) out[f.field_name] = v;
+    // Kommo permite dois campos com o MESMO nome (ex.: um de texto e um de lista): junta os valores.
+    if (v) out[f.field_name] = out[f.field_name] ? `${out[f.field_name]}, ${v}` : v;
   }
   return out;
 }
@@ -109,7 +110,8 @@ export async function syncDictionaries() {
     })),
   );
   if (stages.length) {
-    const { error } = await db.from("stages").upsert(stages, { onConflict: "id" });
+    // As etapas "Venda ganha/perdida" (ids 142/143) existem em TODOS os funis: a chave é funil + etapa.
+    const { error } = await db.from("stages").upsert(stages, { onConflict: "pipeline_id,id" });
     if (error) throw new Error(`Supabase stages: ${error.message}`);
   }
   if (users.length) {
