@@ -9,6 +9,7 @@ type Lead = {
   id: number;
   name: string | null;
   status_id: number | null;
+  pipeline_id: number | null;
   responsible_user_id: number | null;
   phone: string | null;
   created_at_kommo: string | null;
@@ -37,7 +38,7 @@ export default function LeadsTable() {
 
   const [ready, setReady] = useState(false);
   const [leads, setLeads] = useState<Map<number, Lead>>(new Map());
-  const [stages, setStages] = useState<Map<number, string>>(new Map());
+  const [stages, setStages] = useState<Map<string, string>>(new Map());
   const [users, setUsers] = useState<Map<number, string>>(new Map());
   const [live, setLive] = useState(false);
   const [flash, setFlash] = useState<Set<number>>(new Set());
@@ -65,7 +66,7 @@ export default function LeadsTable() {
         id: "stage",
         label: "Etapa do funil",
         width: 160,
-        get: (l) => (l.status_id ? (stages.get(l.status_id) ?? "") : ""),
+        get: (l) => stages.get(`${l.pipeline_id}:${l.status_id}`) ?? "",
         filterable: true,
       },
       {
@@ -101,17 +102,17 @@ export default function LeadsTable() {
       return;
     }
     const [st, us] = await Promise.all([
-      db.from("stages").select("id,name"),
+      db.from("stages").select("id,pipeline_id,name"),
       db.from("kommo_users").select("id,name"),
     ]);
-    setStages(new Map((st.data ?? []).map((s) => [s.id, s.name])));
+    setStages(new Map((st.data ?? []).map((s) => [`${s.pipeline_id}:${s.id}`, s.name as string])));
     setUsers(new Map((us.data ?? []).map((u) => [u.id, u.name])));
 
     const map = new Map<number, Lead>();
     for (let from = 0; ; from += 1000) {
       const { data: rows, error } = await db
         .from("leads")
-        .select("id,name,status_id,responsible_user_id,phone,created_at_kommo,updated_at_kommo,is_deleted,custom_fields")
+        .select("id,name,status_id,pipeline_id,responsible_user_id,phone,created_at_kommo,updated_at_kommo,is_deleted,custom_fields")
         .eq("is_deleted", false)
         .order("created_at_kommo", { ascending: false })
         .range(from, from + 999);
