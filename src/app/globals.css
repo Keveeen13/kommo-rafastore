@@ -1,0 +1,100 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #fff;
+  --text: #1c2024;
+  --muted: #6b7280;
+  --line: #dfe3e8;
+  --head: #eef1f5;
+  --accent: #2563eb;
+  --flash: #fff4c2;
+  --ok: #16a34a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111418;
+    --surface: #181c21;
+    --text: #e6e8eb;
+    --muted: #8b94a1;
+    --line: #2a3038;
+    --head: #20262d;
+    --accent: #6ea0ff;
+    --flash: #4a4217;
+    --ok: #4ade80;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+button, input, select { font: inherit; color: inherit; }
+
+.loading { display: grid; place-items: center; height: 100vh; color: var(--muted); }
+
+.page { display: flex; flex-direction: column; height: 100vh; padding: 16px; gap: 12px; }
+.bar { display: flex; align-items: center; gap: 24px; }
+.title { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+h1 { font-size: 20px; margin: 0; }
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.live.on { color: var(--ok); }
+.live.on i { background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: pulse 2s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 6px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.stats b { font-size: 20px; margin-right: 6px; font-variant-numeric: tabular-nums; }
+.stats span { color: var(--muted); }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.search { flex: 1 1 280px; max-width: 420px; }
+.filters input, .filters select {
+  padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+}
+.ghost { background: none; border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+.ghost:hover { background: var(--head); }
+
+.grid-wrap {
+  flex: 1; overflow: auto; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 10px;
+}
+.grid { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+.grid th, .grid td {
+  padding: 5px 10px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; text-align: center;
+}
+.grid th {
+  position: sticky; top: 0; z-index: 2; background: var(--head);
+  font-size: 15px; font-weight: 700; padding: 9px 10px; cursor: pointer; user-select: none;
+}
+.grid th:hover { background: var(--line); }
+.arrow { color: var(--accent); font-size: 11px; }
+.grid tbody tr:hover td { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.grid td { font-variant-numeric: tabular-nums; }
+.rn {
+  position: sticky; left: 0; z-index: 1; min-width: 44px; background: var(--head) !important;
+  color: var(--muted); font-size: 11px; cursor: default; text-align: center;
+}
+.grid th.rn { z-index: 3; }
+.grid tr.flash td { animation: flash 2.5s ease-out; }
+@keyframes flash { 0%, 60% { background: var(--flash); } 100% { background: transparent; } }
+.empty { padding: 40px !important; color: var(--muted); }
+.more { padding: 12px; text-align: center; }
+.more button { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+
+.login { display: grid; place-items: center; min-height: 100vh; padding: 16px; }
+.login-card {
+  width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 12px; padding: 28px; display: flex; flex-direction: column; gap: 14px;
+}
+.login-card h1 { font-size: 22px; }
+.login-card p { margin: 0; color: var(--muted); }
+.login-card label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.login-card input { padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+.login-card button { padding: 10px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
+.login-card button:disabled { opacity: .6; }
+.err { color: #dc2626; font-size: 13px; }
+
+@media (max-width: 640px) {
+  .page { padding: 10px; }
+  .bar { gap: 12px; }
+}
