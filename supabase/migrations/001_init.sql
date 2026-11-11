@@ -23,11 +23,12 @@ create index if not exists leads_status_idx  on public.leads (status_id);
 
 -- Etapas do funil (para mostrar o nome da etapa)
 create table if not exists public.stages (
-  id            bigint primary key,
+  id            bigint not null,
   pipeline_id   bigint not null,
   pipeline_name text,
   name          text,
-  sort          int
+  sort          int,
+  primary key (pipeline_id, id)
 );
 
 -- Usuários da Kommo (para mostrar o nome do responsável)
