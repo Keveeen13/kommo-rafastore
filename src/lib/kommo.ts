@@ -5,6 +5,7 @@ export type KommoCustomField = {
   field_id: number;
   field_name: string;
   field_code: string | null;
+  field_type?: string;
   values: { value: unknown }[];
 };
 
@@ -20,7 +21,10 @@ export type KommoLead = {
   closed_at: number | null;
   is_deleted?: boolean;
   custom_fields_values: KommoCustomField[] | null;
-  _embedded?: { contacts?: { id: number; is_main: boolean }[] };
+  _embedded?: {
+    contacts?: { id: number; is_main: boolean }[];
+    tags?: { id: number; name: string }[];
+  };
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -31,16 +35,35 @@ function baseUrl() {
   return `https://${sub}.kommo.com/api/v4`;
 }
 
+/**
+ * LIMITADOR GLOBAL DE REQUISIÇÕES
+ * A Kommo permite no máximo 7 requisições/segundo por conta. Toda chamada ao Kommo passa por aqui:
+ * cada requisição só pode começar 200 ms depois da anterior (= no máx. 5 por segundo, deixando folga
+ * para outras integrações que usem a mesma conta). O estado fica em globalThis para ser UM só,
+ * compartilhado entre webhook, sincronização e qualquer rota do Next dentro do mesmo processo.
+ */
+const MIN_INTERVAL_MS = Math.max(150, Number(process.env.KOMMO_MIN_INTERVAL_MS) || 200);
+const gl = globalThis as unknown as { __kommoNextSlot?: number };
+
+async function throttle() {
+  const now = Date.now();
+  const start = Math.max(now, gl.__kommoNextSlot ?? 0);
+  gl.__kommoNextSlot = start + MIN_INTERVAL_MS;
+  if (start > now) await sleep(start - now);
+}
+
 export async function kommoGet<T>(path: string, params?: URLSearchParams): Promise<T | null> {
   const url = `${baseUrl()}${path}${params ? `?${params}` : ""}`;
   for (let attempt = 0; attempt < 5; attempt++) {
+    await throttle();
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${process.env.KOMMO_ACCESS_TOKEN}` },
       cache: "no-store",
     });
     if (res.status === 204) return null; // sem conteúdo (fim da paginação)
     if (res.status === 429) {
-      await sleep(1000 * (attempt + 1)); // limite ~7 req/s
+      // A Kommo disse "devagar": segura TODAS as requisições por alguns segundos.
+      gl.__kommoNextSlot = Date.now() + 1000 * (attempt + 1);
       continue;
     }
     if (!res.ok) throw new Error(`Kommo ${res.status} em ${path}: ${(await res.text()).slice(0, 300)}`);
@@ -63,7 +86,6 @@ export async function fetchLeads(filters: URLSearchParams = new URLSearchParams(
     const leads = data?._embedded?.leads ?? [];
     all.push(...leads);
     if (leads.length < LIMIT) break;
-    await sleep(150);
   }
   return all;
 }
@@ -93,7 +115,6 @@ export async function fetchContacts(ids: number[]): Promise<Map<number, ContactI
       const phone = c.custom_fields_values?.find((f) => f.field_code === "PHONE")?.values?.[0]?.value;
       map.set(c.id, { name: c.name, phone: phone != null ? String(phone) : null });
     }
-    await sleep(150);
   }
   return map;
 }
@@ -114,7 +135,7 @@ export async function fetchUsers() {
 
 export async function fetchLeadCustomFields() {
   const data = await kommoGet<{
-    _embedded?: { custom_fields: { id: number; name: string; type: string }[] };
+    _embedded?: { custom_fields: { id: number; name: string; type: string; sort: number }[] };
   }>("/leads/custom_fields", new URLSearchParams({ limit: "250" }));
   return data?._embedded?.custom_fields ?? [];
 }
