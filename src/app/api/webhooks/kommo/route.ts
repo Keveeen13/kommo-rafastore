@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { markDeleted, syncLeadsByIds } from "@/lib/sync";
+import { markDeleted, queueLeadSync } from "@/lib/sync";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -53,7 +53,8 @@ export async function POST(req: Request) {
   // A Kommo exige resposta em até 2s: responde já e processa em seguida.
   after(async () => {
     try {
-      await syncLeadsByIds([...upsert].filter((id) => !del.has(id)));
+      // Os leads vão para a fila (agrupados em lotes, respeitando o limite da Kommo).
+      queueLeadSync([...upsert].filter((id) => !del.has(id)));
       await markDeleted([...del]);
     } catch (e) {
       console.error("[webhook kommo]", e);
