@@ -98,3 +98,25 @@ h1 { font-size: 20px; margin: 0; }
   .page { padding: 10px; }
   .bar { gap: 12px; }
 }
+
+/* ---------- janela "Colunas e funis" ---------- */
+.primary { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; }
+.primary:disabled { opacity: .6; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: grid; place-items: center; padding: 16px; z-index: 50; }
+.modal {
+  width: 100%; max-width: 760px; max-height: 88vh; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+}
+.modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.modal-head h2 { margin: 0; font-size: 18px; }
+.modal-body { padding: 14px 18px; overflow: auto; display: flex; flex-direction: column; gap: 18px; }
+.modal-body h3 { margin: 0 0 4px; font-size: 15px; }
+.modal-body h4 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.modal-body em { color: var(--muted); font-style: normal; font-weight: 400; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+.chk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 12px; }
+.chk { display: flex; align-items: center; gap: 8px; padding: 4px 2px; cursor: pointer; font-size: 14px; }
+.col-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+.col-tools input { flex: 1 1 200px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.modal-foot { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--line); }
+.modal-foot .err { margin-right: auto; }
