@@ -1,5 +1,6 @@
 import {
   fetchContacts,
+  fetchLeadCustomFields,
   fetchLeads,
   fetchLeadsByIds,
   fetchPipelines,
@@ -8,13 +9,34 @@ import {
 } from "./kommo";
 import { supabaseAdmin } from "./supabase-admin";
 
+const TZ = "America/Bahia";
 const iso = (unix: number | null | undefined) => (unix ? new Date(unix * 1000).toISOString() : null);
+
+/** Converte o valor bruto de um campo da Kommo em texto legível. */
+function formatValue(type: string | undefined, raw: unknown): string {
+  if (raw == null) return "";
+  if (typeof raw === "boolean") return raw ? "Sim" : "Não";
+  if (typeof raw === "number" && (type === "date" || type === "date_time" || type === "birthday")) {
+    const d = new Date(raw * 1000);
+    return type === "date_time"
+      ? d.toLocaleString("pt-BR", { timeZone: TZ, hour12: false })
+      : d.toLocaleDateString("pt-BR", { timeZone: TZ });
+  }
+  if (typeof raw === "object") {
+    const o = raw as Record<string, unknown>; // arquivos, endereços, vínculos…
+    return String(o.file_name ?? o.name ?? o.value ?? JSON.stringify(o));
+  }
+  return String(raw);
+}
 
 /** { field_name: "valor1, valor2" } — campos de múltipla escolha viram texto separado por vírgula. */
 function flattenCustomFields(lead: KommoLead): Record<string, string> {
   const out: Record<string, string> = {};
   for (const f of lead.custom_fields_values ?? []) {
-    const v = f.values.map((x) => String(x.value ?? "")).filter(Boolean).join(", ");
+    const v = f.values
+      .map((x) => formatValue(f.field_type, x.value))
+      .filter(Boolean)
+      .join(", ");
     // Kommo permite dois campos com o MESMO nome (ex.: um de texto e um de lista): junta os valores.
     if (v) out[f.field_name] = out[f.field_name] ? `${out[f.field_name]}, ${v}` : v;
   }
@@ -45,6 +67,7 @@ async function toRows(leads: KommoLead[]) {
       contact_id: cid,
       contact_name: c?.name ?? null,
       phone: c?.phone ?? null,
+      tags: (l._embedded?.tags ?? []).map((t) => t.name).join(", "),
       created_at_kommo: iso(l.created_at),
       updated_at_kommo: iso(l.updated_at),
       closed_at: iso(l.closed_at),
@@ -66,10 +89,52 @@ async function upsertLeads(leads: KommoLead[]) {
   return rows.length;
 }
 
-/** Chamado pelo webhook: rebusca na Kommo os leads alterados (sempre dado completo e atual). */
+/** Rebusca na Kommo os leads informados (sempre dado completo e atual). */
 export async function syncLeadsByIds(ids: number[]) {
   if (!ids.length) return 0;
   return upsertLeads(await fetchLeadsByIds(ids));
+}
+
+/**
+ * FILA DE WEBHOOKS
+ * Em vez de 1 busca na Kommo por webhook recebido, junta tudo que chegar em 1,5 s e busca de uma vez
+ * (até 250 leads por requisição). Uma edição em massa de 1.000 leads vira ~4 requisições, e não 1.000.
+ * Se o processo reiniciar com itens na fila, a reconciliação periódica (/api/sync?minutes=N) recupera.
+ */
+type Queue = { pending: Set<number>; timer: ReturnType<typeof setTimeout> | null; running: boolean };
+const gq = globalThis as unknown as { __leadQueue?: Queue };
+const queue: Queue = (gq.__leadQueue ??= { pending: new Set(), timer: null, running: false });
+const FLUSH_DELAY_MS = 1500;
+
+function schedule() {
+  if (queue.timer || !queue.pending.size) return;
+  queue.timer = setTimeout(flush, FLUSH_DELAY_MS);
+}
+
+async function flush() {
+  queue.timer = null;
+  if (queue.running) return schedule();
+  queue.running = true;
+  try {
+    while (queue.pending.size) {
+      const batch = [...queue.pending].slice(0, 250);
+      batch.forEach((id) => queue.pending.delete(id));
+      try {
+        const n = await syncLeadsByIds(batch);
+        console.log(`[webhook] ${n} lead(s) sincronizado(s)`);
+      } catch (e) {
+        console.error("[webhook] falha ao sincronizar lote", e);
+      }
+    }
+  } finally {
+    queue.running = false;
+    schedule();
+  }
+}
+
+export function queueLeadSync(ids: number[]) {
+  ids.forEach((id) => queue.pending.add(id));
+  schedule();
 }
 
 /** Leads excluídos na Kommo: marca como excluído (mantém histórico, some do dashboard). */
@@ -95,10 +160,10 @@ export async function syncAll(opts: { updatedWithinMinutes?: number } = {}) {
   return n;
 }
 
-/** Nomes de etapas/funis e usuários. */
+/** Nomes de funis/etapas, usuários e definição dos campos personalizados (3 requisições). */
 export async function syncDictionaries() {
   const db = supabaseAdmin();
-  const [pipelines, users] = await Promise.all([fetchPipelines(), fetchUsers()]);
+  const [pipelines, users, fields] = await Promise.all([fetchPipelines(), fetchUsers(), fetchLeadCustomFields()]);
 
   const stages = pipelines.flatMap((p) =>
     (p._embedded?.statuses ?? []).map((s) => ({
@@ -119,5 +184,11 @@ export async function syncDictionaries() {
       .from("kommo_users")
       .upsert(users.map((u) => ({ id: u.id, name: u.name })), { onConflict: "id" });
     if (error) throw new Error(`Supabase users: ${error.message}`);
+  }
+  if (fields.length) {
+    const { error } = await db
+      .from("field_defs")
+      .upsert(fields.map((f) => ({ id: f.id, name: f.name, type: f.type, sort: f.sort })), { onConflict: "id" });
+    if (error) throw new Error(`Supabase field_defs: ${error.message}`);
   }
 }
