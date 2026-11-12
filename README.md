@@ -40,7 +40,16 @@ As colunas Vendedor, Marca, Produto procurado etc. são **campos personalizados*
 ```bash
 curl -H "Authorization: Bearer $SYNC_SECRET" https://SEU_DOMINIO/api/fields
 ```
-Ajuste `src/lib/columns.ts`. Para criar uma coluna nova é só somar uma linha lá — o banco guarda todos os campos em JSON, sem migração.
+As colunas são geradas automaticamente com TODOS os campos do lead. No painel, o botão **⚙ Colunas e funis** escolhe quais colunas aparecem e quais funis são exibidos; a escolha fica salva no seu usuário (tabela `user_settings`, migração 003). Os padrões de quem ainda não personalizou ficam em `src/lib/columns.ts`.
+
+## Limite de requisições da Kommo (7 por segundo)
+- Toda chamada à Kommo passa por um limitador global em `src/lib/kommo.ts`: no máximo **5 por segundo** (intervalo de 200 ms, ajustável com `KOMMO_MIN_INTERVAL_MS`, mínimo 150), deixando folga para outras integrações da mesma conta. Em caso de `429`, todas as chamadas pausam.
+- Webhooks são agrupados: tudo que chegar em 1,5 s vira uma só busca de até 250 leads. Uma edição em massa de 1.000 leads gera ~4 requisições, não 1.000.
+- Rode o sistema com **uma única instância** (`pm2 start` sem `-i`), pois o limitador é por processo.
+- Recomendado: reconciliação a cada 15 min (recupera webhooks perdidos e atualiza nomes de funis/etapas/campos). No `crontab -e` da VPS:
+  ```
+  */15 * * * * curl -s -X POST -H "Authorization: Bearer SEU_SYNC_SECRET" "https://SEU_DOMINIO/api/sync?minutes=20" >/dev/null
+  ```
 
 ## Rede de segurança
 Se um webhook se perder (a Kommo tenta no máximo 5 vezes), agende uma chamada periódica que reconcilia só o que mudou recentemente:
